@@ -37,6 +37,12 @@
             font-size: 1rem;
             margin-top: 0;
         }
+        #log-conexion {
+            font-size: 0.85rem;
+            color: #80868b;
+            font-style: italic;
+            margin-bottom: 15px;
+        }
         #mensaje-texto { 
             font-size: 2.8rem; 
             font-weight: bold; 
@@ -63,13 +69,13 @@
     <div class="card">
         <h1>Sistema Sense-Vox</h1>
         <p>Traductor de Lenguaje de Señas en Tiempo Real</p>
+        <div id="log-conexion">Esperando reporte del sistema...</div>
         <hr style="border: 0; border-top: 1px solid #f1f3f4; margin: 20px 0;">
         <div id="mensaje-texto">Esperando seña...</div>
-        <div id="estado-sistema" class="status">● Desconectado</div>
+        <div id="estado-sistema" class="status">● Comprobando...</div>
     </div>
 
     <script>
-        // Configuración exacta de tu proyecto Firebase
         const firebaseConfig = {
             apiKey: "AIzaSyDYoC5DxEJIckUDNbEmwGN0YK3zqo4ve7k",
             authDomain: "proyecto-4250e.firebaseapp.com",
@@ -80,36 +86,37 @@
             appId: "1:789688204601:web:3f3abdfe0d66b373da7ce8"
         };
 
-        // Inicializar Firebase en la web
         firebase.initializeApp(firebaseConfig);
         const database = firebase.database();
 
-        // Variables de control para evitar repeticiones del asistente de voz
         let ultimoTexto = "";
 
-        // 1. ESCUCHAR LA LETRA O PALABRA TRADUCIDA (Ruta: /letra_traducida)
+        // 1. ESCUCHAR REPORTE O MENSAJES DE CONEXIÓN INICIAL (Ruta: /mensaje)
+        database.ref('mensaje').on('value', (snapshot) => {
+            const msg = snapshot.val();
+            if (msg) {
+                document.getElementById('log-conexion').innerText = msg;
+            }
+        });
+
+        // 2. ESCUCHAR LA LETRA O PALABRA TRADUCIDA (Ruta: /letra_traducida)
         database.ref('letra_traducida').on('value', (snapshot) => {
             const texto = snapshot.val();
             
             if (texto && texto !== ultimoTexto) {
                 ultimoTexto = texto;
-                
-                // Cambiar el texto en la pantalla
                 document.getElementById('mensaje-texto').innerText = texto;
                 
-                // Ejecutar la síntesis de voz (TTS)
                 const synth = window.speechSynthesis;
                 const enunciar = new SpeechSynthesisUtterance(texto);
-                
-                enunciar.lang = 'es-COL'; // Español de Colombia
-                enunciar.rate = 1.0;      // Velocidad
-                enunciar.pitch = 1.0;     // Tono
-                
+                enunciar.lang = 'es-COL';
+                enunciar.rate = 1.0;
+                enunciar.pitch = 1.0;
                 synth.speak(enunciar);
             }
         });
 
-        // 2. ESCUCHAR EL ESTADO DEL HARDWARE (Ruta: /estado)
+        // 3. ESCUCHAR EL ESTADO VIVO/MUERTO DEL HARDWARE (Ruta: /estado)
         database.ref('estado').on('value', (snapshot) => {
             const estado = snapshot.val();
             const elEstado = document.getElementById('estado-sistema');
@@ -122,11 +129,11 @@
                 } else {
                     elEstado.style.backgroundColor = "#fce8e6";
                     elEstado.style.color = "#c5221f";
+                    document.getElementById('mensaje-texto').innerText = "---"; // Resetea la pantalla si se desconecta
                 }
             }
         });
 
-        // Activar el contenedor de audio por restricciones del navegador
         document.body.addEventListener('click', () => {
             console.log("Audio verificado.");
         });
