@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Traductor de Señas - Monitor de Voz</title>
+    
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+
+    <style>
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            height: 100vh; 
+            margin: 0; 
+            background-color: #f0f2f5; 
+        }
+        .card { 
+            background: white; 
+            padding: 40px; 
+            border-radius: 20px; 
+            box-shadow: 0 10px 30px rgba(0,0,0,0.15); 
+            text-align: center; 
+            width: 85%; 
+            max-width: 500px; 
+        }
+        h1 { 
+            color: #1a73e8; 
+            margin-bottom: 5px;
+            font-size: 2rem;
+        }
+        p {
+            color: #5f6368;
+            font-size: 1rem;
+            margin-top: 0;
+        }
+        #mensaje-texto { 
+            font-size: 2.8rem; 
+            font-weight: bold; 
+            color: #202124; 
+            margin: 35px 0; 
+            min-height: 70px;
+            text-transform: uppercase;
+            word-wrap: break-word;
+        }
+        .status { 
+            font-size: 0.9rem; 
+            color: #137333; 
+            background-color: #e6f4ea;
+            padding: 8px 15px;
+            border-radius: 50px;
+            display: inline-block;
+            font-weight: 500;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="card">
+        <h1>Sistema Sense-Vox</h1>
+        <p>Traductor de Lenguaje de Señas en Tiempo Real</p>
+        <hr style="border: 0; border-top: 1px solid #f1f3f4; margin: 20px 0;">
+        <div id="mensaje-texto">Esperando seña...</div>
+        <div class="status">● Conectado a Firebase</div>
+    </div>
+
+    <script>
+        // Configuración exacta de tu proyecto Firebase
+        const firebaseConfig = {
+            apiKey: "AIzaSyDYoC5DxEJIckUDNbEmwGN0YK3zqo4ve7k",
+            authDomain: "proyecto-4250e.firebaseapp.com",
+            databaseURL: "https://proyecto-4250e-default-rtdb.firebaseio.com",
+            projectId: "proyecto-4250e",
+            storageBucket: "proyecto-4250e.firebasestorage.app",
+            messagingSenderId: "789688204601",
+            appId: "1:789688204601:web:3f3abdfe0d66b373da7ce8"
+        };
+
+        // Inicializar Firebase en la web
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+
+        // Apuntamos al nodo "/mensaje" que es donde escribe el ESP32
+        const refMensaje = database.ref('mensaje');
+
+        // Variable para evitar que repita la misma palabra si no ha cambiado
+        let ultimoTexto = "";
+
+        // Escuchar la base de datos en tiempo real
+        refMensaje.on('value', (snapshot) => {
+            const texto = snapshot.val();
+            
+            // Si llega un texto válido y es diferente al anterior, lo procesa
+            if (texto && texto !== ultimoTexto) {
+                ultimoTexto = texto;
+                
+                // 1. Cambiar el texto en la pantalla animada
+                document.getElementById('mensaje-texto').innerText = texto;
+                
+                // 2. Ejecutar la síntesis de voz (TTS)
+                const synth = window.speechSynthesis;
+                const enunciar = new SpeechSynthesisUtterance(texto);
+                
+                // Configuración de la voz
+                enunciar.lang = 'es-COL'; // Español de Colombia
+                enunciar.rate = 1.0;      // Velocidad normal de habla
+                enunciar.pitch = 1.0;     // Tono de voz normal
+                
+                // Hablar
+                synth.speak(enunciar);
+            }
+        });
+
+        // Truco extra: Al hacer clic en la pantalla activa el audio si el navegador lo bloquea
+        document.body.addEventListener('click', () => {
+            console.log("Audio activado correctamente en el navegador.");
+        });
+    </script>
+
+</body>
+</html>
