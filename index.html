@@ -40,7 +40,31 @@
         p.subtitle {
             color: #7f8c8d;
             font-size: 14px;
-            margin-bottom: 30px;
+            margin-bottom: 20px;
+        }
+
+        .selector-box {
+            margin-bottom: 20px;
+            text-align: left;
+        }
+
+        label {
+            font-size: 12px;
+            font-weight: bold;
+            color: #34495e;
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        select {
+            width: 100%;
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid #bdc3c7;
+            background-color: #fff;
+            color: #333;
+            font-size: 14px;
+            outline: none;
         }
 
         .display-card {
@@ -49,7 +73,6 @@
             padding: 40px 20px;
             border-radius: 12px;
             margin-bottom: 25px;
-            transition: all 0.3s ease;
         }
 
         .letra-detectada {
@@ -88,7 +111,12 @@
 
     <div class="container">
         <h1>Intérprete de Señas</h1>
-        <p class="subtitle">Lectura en tiempo real desde los sensores</p>
+        <p class="subtitle">Lectura en tiempo real con selección de voz</p>
+
+        <div class="selector-box">
+            <label for="voiceSelect">Selecciona el tipo de voz:</label>
+            <select id="voiceSelect"><option>Cargando voces disponibles...</option></select>
+        </div>
 
         <div class="display-card">
             <div class="letra-detectada" id="letraObtenida">Cargando...</div>
@@ -101,39 +129,104 @@
     </div>
 
     <script>
-        // Configuración de Firebase basada en tus datos del ESP32
+        // Configuración de Firebase
         const firebaseConfig = {
             databaseURL: "https://proyecto-4250e-default-rtdb.firebaseio.com"
         };
 
-        // Inicializar Firebase
         firebase.initializeApp(firebaseConfig);
 
-        // Referencia a la base de datos
         const dbRef = firebase.database().ref("/mensaje");
         const letraElemento = document.getElementById("letraObtenida");
         const indicador = document.getElementById("statusIndicator");
         const textoEstado = document.getElementById("statusText");
+        const voiceSelect = document.getElementById("voiceSelect");
 
-        // Escuchar cambios en tiempo real
+        let ultimoTextoHablado = "";
+        let listaVoces = [];
+
+        // 1. CARGAR LAS VOCES DEL SISTEMA OPERATIVO
+        function cargarVoces() {
+            if (!('speechSynthesis' in window)) return;
+            
+            // Obtiene todas las voces del dispositivo (Android, Windows, iOS tienen diferentes voces)
+            listaVoces = window.speechSynthesis.getVoices();
+            voiceSelect.innerHTML = '';
+
+            // Filtrar solo las voces que hablen español ("es") para evitar acentos extraños
+            const vocesEspañol = listaVoces.filter(voz => voz.lang.startsWith('es'));
+
+            if (vocesEspañol.length === 0) {
+                // Si por alguna razón no detecta filtros, muestra todas
+                listaVoces.forEach((voz, index) => {
+                    const option = document.createElement('option');
+                    option.value = index;
+                    option.textContent = `${voz.name} (${voz.lang})`;
+                    voiceSelect.appendChild(option);
+                });
+            } else {
+                vocesEspañol.forEach((voz) => {
+                    const option = document.createElement('option');
+                    // Guardamos el nombre de la voz como identificador
+                    option.value = voz.name;
+                    option.textContent = voz.name.replace("Microsoft", "").replace("Google", "").trim();
+                    voiceSelect.appendChild(option);
+                });
+            }
+        }
+
+        // Ejecutar la carga de voces (algunos navegadores las cargan de forma asíncrona)
+        if (typeof speechSynthesis !== 'undefined' && speechSynthesis.onvoiceschanged !== undefined) {
+            speechSynthesis.onvoiceschanged = cargarVoces;
+        }
+        cargarVoces();
+
+        // 2. FUNCIÓN DE TEXTO A VOZ USANDO LA VOZ SELECCIONADA
+        function textToSpeech(texto) {
+            if (!('speechSynthesis' in window)) return;
+
+            window.speechSynthesis.cancel(); // Detener lecturas previas
+
+            let textoLimpio = texto.replace("=", ""); 
+            const mensajeVoz = new SpeechSynthesisUtterance(textoLimpio);
+            
+            // Buscar la voz seleccionada en el menú desplegable
+            const nombreVozSeleccionada = voiceSelect.value;
+            const vozElegida = listaVoces.find(voz => voz.name === nombreVozSeleccionada);
+            
+            if (vozElegida) {
+                mensajeVoz.voice = vozElegida;
+            } else {
+                mensajeVoz.lang = 'es-ES'; // Por defecto si falla
+            }
+
+            mensajeVoz.rate = 1.0;  // Velocidad de lectura
+            mensajeVoz.pitch = 1.0; // Tono
+
+            window.speechSynthesis.speak(mensajeVoz);
+        }
+
+        // 3. ESCUCHAR CAMBIOS EN FIREBASE
         dbRef.on('value', (snapshot) => {
             if (snapshot.exists()) {
                 const data = snapshot.val();
                 letraElemento.innerText = data;
                 
-                // Actualizar interfaz a estado conectado exitosamente
                 indicador.classList.add("online");
                 textoEstado.innerText = "Sistema en línea";
+
+                if (data !== ultimoTextoHablado && data !== "Ningun gesto") {
+                    textToSpeech(data);
+                    ultimoTextoHablado = data;
+                }
             } else {
                 letraElemento.innerText = "Sin Datos";
                 indicador.classList.remove("online");
                 textoEstado.innerText = "Nodo vacío en la BD";
             }
         }, (error) => {
-            console.error("Error al leer de Firebase: ", error);
+            console.error("Error: ", error);
             letraElemento.innerText = "Error";
-            indicador.classList.remove("online");
-            textoEstado.innerText = "Error de conexión";
         });
     </script>
 </body>
