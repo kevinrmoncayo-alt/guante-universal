@@ -3,141 +3,138 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Traductor de Señas - Monitor de Voz</title>
-    
-    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
-
+    <title>Monitoreo de Gestos - Traductor</title>
     <style>
-        body { 
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-            display: flex; 
-            justify-content: center; 
-            align-items: center; 
-            height: 100vh; 
-            margin: 0; 
-            background-color: #f0f2f5; 
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
-        .card { 
-            background: white; 
-            padding: 40px; 
-            border-radius: 20px; 
-            box-shadow: 0 10px 30px rgba(0,0,0,0.15); 
-            text-align: center; 
-            width: 85%; 
-            max-width: 500px; 
+
+        body {
+            background-color: #f4f7f6;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            color: #333;
         }
-        h1 { 
-            color: #1a73e8; 
-            margin-bottom: 5px;
-            font-size: 2rem;
+
+        .container {
+            background-color: #ffffff;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            max-width: 450px;
+            width: 90%;
         }
-        p {
-            color: #5f6368;
-            font-size: 1rem;
-            margin-top: 0;
+
+        h1 {
+            font-size: 24px;
+            color: #2c3e50;
+            margin-bottom: 10px;
         }
-        #log-conexion {
-            font-size: 0.85rem;
-            color: #80868b;
-            font-style: italic;
-            margin-bottom: 15px;
+
+        p.subtitle {
+            color: #7f8c8d;
+            font-size: 14px;
+            margin-bottom: 30px;
         }
-        #mensaje-texto { 
-            font-size: 2.8rem; 
-            font-weight: bold; 
-            color: #202124; 
-            margin: 35px 0; 
-            min-height: 70px;
-            text-transform: uppercase;
-            word-wrap: break-word;
-        }
-        .status { 
-            font-size: 0.9rem; 
-            color: #5f6368; 
-            background-color: #f1f3f4;
-            padding: 8px 15px;
-            border-radius: 50px;
-            display: inline-block;
-            font-weight: 500;
+
+        .display-card {
+            background: linear-gradient(135deg, #3498db, #2c3e50);
+            color: white;
+            padding: 40px 20px;
+            border-radius: 12px;
+            margin-bottom: 25px;
             transition: all 0.3s ease;
         }
+
+        .letra-detectada {
+            font-size: 48px;
+            font-weight: bold;
+            letter-spacing: 1px;
+        }
+
+        .status-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            color: #95a5a6;
+        }
+
+        .indicator {
+            width: 12px;
+            height: 12px;
+            background-color: #e74c3c;
+            border-radius: 50%;
+            transition: background-color 0.3s ease;
+        }
+
+        .indicator.online {
+            background-color: #2ecc71;
+            box-shadow: 0 0 8px #2ecc71;
+        }
     </style>
+
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 </head>
 <body>
 
-    <div class="card">
-        <h1>Sistema Sense-Vox</h1>
-        <p>Traductor de Lenguaje de Señas en Tiempo Real</p>
-        <div id="log-conexion">Esperando reporte del sistema...</div>
-        <hr style="border: 0; border-top: 1px solid #f1f3f4; margin: 20px 0;">
-        <div id="mensaje-texto">Esperando seña...</div>
-        <div id="estado-sistema" class="status">● Comprobando...</div>
+    <div class="container">
+        <h1>Intérprete de Señas</h1>
+        <p class="subtitle">Lectura en tiempo real desde los sensores</p>
+
+        <div class="display-card">
+            <div class="letra-detectada" id="letraObtenida">Cargando...</div>
+        </div>
+
+        <div class="status-container">
+            <div class="indicator" id="statusIndicator"></div>
+            <span id="statusText">Conectando a Firebase...</span>
+        </div>
     </div>
 
     <script>
+        // Configuración de Firebase basada en tus datos del ESP32
         const firebaseConfig = {
-            apiKey: "AIzaSyDYoC5DxEJIckUDNbEmwGN0YK3zqo4ve7k",
-            authDomain: "proyecto-4250e.firebaseapp.com",
-            databaseURL: "https://proyecto-4250e-default-rtdb.firebaseio.com",
-            projectId: "proyecto-4250e",
-            storageBucket: "proyecto-4250e.firebasestorage.app",
-            messagingSenderId: "789688204601",
-            appId: "1:789688204601:web:3f3abdfe0d66b373da7ce8"
+            databaseURL: "https://proyecto-4250e-default-rtdb.firebaseio.com"
         };
 
+        // Inicializar Firebase
         firebase.initializeApp(firebaseConfig);
-        const database = firebase.database();
 
-        let ultimoTexto = "";
+        // Referencia a la base de datos
+        const dbRef = firebase.database().ref("/mensaje");
+        const letraElemento = document.getElementById("letraObtenida");
+        const indicador = document.getElementById("statusIndicator");
+        const textoEstado = document.getElementById("statusText");
 
-        // 1. ESCUCHAR REPORTE O MENSAJES DE CONEXIÓN INICIAL (Ruta: /mensaje)
-        database.ref('mensaje').on('value', (snapshot) => {
-            const msg = snapshot.val();
-            if (msg) {
-                document.getElementById('log-conexion').innerText = msg;
-            }
-        });
-
-        // 2. ESCUCHAR LA LETRA O PALABRA TRADUCIDA (Ruta: /letra_traducida)
-        database.ref('letra_traducida').on('value', (snapshot) => {
-            const texto = snapshot.val();
-            
-            if (texto && texto !== ultimoTexto) {
-                ultimoTexto = texto;
-                document.getElementById('mensaje-texto').innerText = texto;
+        // Escuchar cambios en tiempo real
+        dbRef.on('value', (snapshot) => {
+            if (snapshot.exists()) {
+                const data = snapshot.val();
+                letraElemento.innerText = data;
                 
-                const synth = window.speechSynthesis;
-                const enunciar = new SpeechSynthesisUtterance(texto);
-                enunciar.lang = 'es-COL';
-                enunciar.rate = 1.0;
-                enunciar.pitch = 1.0;
-                synth.speak(enunciar);
+                // Actualizar interfaz a estado conectado exitosamente
+                indicador.classList.add("online");
+                textoEstado.innerText = "Sistema en línea";
+            } else {
+                letraElemento.innerText = "Sin Datos";
+                indicador.classList.remove("online");
+                textoEstado.innerText = "Nodo vacío en la BD";
             }
-        });
-
-        // 3. ESCUCHAR EL ESTADO VIVO/MUERTO DEL HARDWARE (Ruta: /estado)
-        database.ref('estado').on('value', (snapshot) => {
-            const estado = snapshot.val();
-            const elEstado = document.getElementById('estado-sistema');
-            
-            if (estado) {
-                elEstado.innerText = "● " + estado.toUpperCase();
-                if (estado.toLowerCase() === "conectado") {
-                    elEstado.style.backgroundColor = "#e6f4ea";
-                    elEstado.style.color = "#137333";
-                } else {
-                    elEstado.style.backgroundColor = "#fce8e6";
-                    elEstado.style.color = "#c5221f";
-                    document.getElementById('mensaje-texto').innerText = "---"; // Resetea la pantalla si se desconecta
-                }
-            }
-        });
-
-        document.body.addEventListener('click', () => {
-            console.log("Audio verificado.");
+        }, (error) => {
+            console.error("Error al leer de Firebase: ", error);
+            letraElemento.innerText = "Error";
+            indicador.classList.remove("online");
+            textoEstado.innerText = "Error de conexión";
         });
     </script>
-
 </body>
 </html>
