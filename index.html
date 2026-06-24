@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -76,7 +77,7 @@
         }
 
         .letra-detectada {
-            font-size: 48px;
+            font-size: 44px;
             font-weight: bold;
             letter-spacing: 1px;
         }
@@ -119,7 +120,7 @@
         </div>
 
         <div class="display-card">
-            <div class="letra-detectada" id="letraObtenida">Cargando...</div>
+            <div class="letra-detectada" id="letraObtenida">Conectando...</div>
         </div>
 
         <div class="status-container">
@@ -129,14 +130,15 @@
     </div>
 
     <script>
-        // Configuración de Firebase
+        // Configuración de Firebase - Apuntando a tu BD
         const firebaseConfig = {
             databaseURL: "https://proyecto-4250e-default-rtdb.firebaseio.com"
         };
 
         firebase.initializeApp(firebaseConfig);
 
-        const dbRef = firebase.database().ref("/mensaje");
+        // REFERENCIA AL NODO CORRECTO
+        const dbRef = firebase.database().ref("/letra_traducida");
         const letraElemento = document.getElementById("letraObtenida");
         const indicador = document.getElementById("statusIndicator");
         const textoEstado = document.getElementById("statusText");
@@ -145,29 +147,25 @@
         let ultimoTextoHablado = "";
         let listaVoces = [];
 
-        // 1. CARGAR LAS VOCES DEL SISTEMA OPERATIVO
+        // CARGAR LAS VOCES DEL NAVEGADOR
         function cargarVoces() {
             if (!('speechSynthesis' in window)) return;
             
-            // Obtiene todas las voces del dispositivo (Android, Windows, iOS tienen diferentes voces)
             listaVoces = window.speechSynthesis.getVoices();
             voiceSelect.innerHTML = '';
 
-            // Filtrar solo las voces que hablen español ("es") para evitar acentos extraños
             const vocesEspañol = listaVoces.filter(voz => voz.lang.startsWith('es'));
 
             if (vocesEspañol.length === 0) {
-                // Si por alguna razón no detecta filtros, muestra todas
                 listaVoces.forEach((voz, index) => {
                     const option = document.createElement('option');
-                    option.value = index;
+                    option.value = voz.name;
                     option.textContent = `${voz.name} (${voz.lang})`;
                     voiceSelect.appendChild(option);
                 });
             } else {
                 vocesEspañol.forEach((voz) => {
                     const option = document.createElement('option');
-                    // Guardamos el nombre de la voz como identificador
                     option.value = voz.name;
                     option.textContent = voz.name.replace("Microsoft", "").replace("Google", "").trim();
                     voiceSelect.appendChild(option);
@@ -175,48 +173,53 @@
             }
         }
 
-        // Ejecutar la carga de voces (algunos navegadores las cargan de forma asíncrona)
         if (typeof speechSynthesis !== 'undefined' && speechSynthesis.onvoiceschanged !== undefined) {
             speechSynthesis.onvoiceschanged = cargarVoces;
         }
         cargarVoces();
 
-        // 2. FUNCIÓN DE TEXTO A VOZ USANDO LA VOZ SELECCIONADA
+        // REPRODUCIR TEXTO A VOZ
         function textToSpeech(texto) {
             if (!('speechSynthesis' in window)) return;
 
-            window.speechSynthesis.cancel(); // Detener lecturas previas
+            window.speechSynthesis.cancel(); 
 
+            // Quitamos el signo "=" si viene en la cadena para mejorar la pronunciación
             let textoLimpio = texto.replace("=", ""); 
             const mensajeVoz = new SpeechSynthesisUtterance(textoLimpio);
             
-            // Buscar la voz seleccionada en el menú desplegable
             const nombreVozSeleccionada = voiceSelect.value;
             const vozElegida = listaVoces.find(voz => voz.name === nombreVozSeleccionada);
             
             if (vozElegida) {
                 mensajeVoz.voice = vozElegida;
             } else {
-                mensajeVoz.lang = 'es-ES'; // Por defecto si falla
+                mensajeVoz.lang = 'es-ES';
             }
 
-            mensajeVoz.rate = 1.0;  // Velocidad de lectura
-            mensajeVoz.pitch = 1.0; // Tono
+            mensajeVoz.rate = 1.0;  
+            mensajeVoz.pitch = 1.0; 
 
             window.speechSynthesis.speak(mensajeVoz);
         }
 
-        // 3. ESCUCHAR CAMBIOS EN FIREBASE
+        // ESCUCHAR EN TIEMPO REAL
         dbRef.on('value', (snapshot) => {
             if (snapshot.exists()) {
                 const data = snapshot.val();
+                
+                // 1. Mostrar SIEMPRE el texto recibido en la tarjeta web
                 letraElemento.innerText = data;
                 
                 indicador.classList.add("online");
                 textoEstado.innerText = "Sistema en línea";
 
-                if (data !== ultimoTextoHablado && data !== "Ningun gesto") {
-                    textToSpeech(data);
+                // 2. Lógica para hablar: Solo habla si el texto cambió
+                if (data !== ultimoTextoHablado) {
+                    // Evitamos que pronuncie "Ningun gesto" para no saturar de audio en reposo
+                    if (data !== "Ningun gesto") {
+                        textToSpeech(data);
+                    }
                     ultimoTextoHablado = data;
                 }
             } else {
@@ -226,7 +229,7 @@
             }
         }, (error) => {
             console.error("Error: ", error);
-            letraElemento.innerText = "Error";
+            letraElemento.innerText = "Error de Conexión";
         });
     </script>
 </body>
