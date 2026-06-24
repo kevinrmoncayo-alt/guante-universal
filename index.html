@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -89,6 +88,7 @@
             gap: 8px;
             font-size: 14px;
             color: #95a5a6;
+            margin-bottom: 15px;
         }
 
         .indicator {
@@ -103,6 +103,20 @@
             background-color: #2ecc71;
             box-shadow: 0 0 8px #2ecc71;
         }
+
+        /* Consola de errores interna */
+        .error-log {
+            background-color: #fadbd8;
+            border: 1px solid #e74c3c;
+            color: #78281f;
+            padding: 10px;
+            border-radius: 8px;
+            font-size: 11px;
+            text-align: left;
+            max-height: 100px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
     </style>
 
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
@@ -116,28 +130,41 @@
 
         <div class="selector-box">
             <label for="voiceSelect">Selecciona el tipo de voz:</label>
-            <select id="voiceSelect"><option>Cargando voces disponibles...</option></select>
+            <select id="voiceSelect"><option>Cargando voces...</option></select>
         </div>
 
         <div class="display-card">
-            <div class="letra-detectada" id="letraObtenida">Conectando...</div>
+            <div class="letra-detectada" id="letraObtenida">Buscando Base de Datos...</div>
         </div>
 
         <div class="status-container">
             <div class="indicator" id="statusIndicator"></div>
-            <span id="statusText">Conectando a Firebase...</span>
+            <span id="statusText">Intentando conectar...</span>
         </div>
+
+        <div class="error-log" id="errorLog">Historial del sistema: Listo para capturar errores.</div>
     </div>
 
     <script>
-        // Configuración de Firebase - Apuntando a tu BD
+        const logElement = document.getElementById("errorLog");
+        
+        function agregarLog(mensaje) {
+            logElement.innerText += "\n> " + mensaje;
+            console.log(mensaje);
+        }
+
+        // Configuración de Firebase
         const firebaseConfig = {
             databaseURL: "https://proyecto-4250e-default-rtdb.firebaseio.com"
         };
 
-        firebase.initializeApp(firebaseConfig);
+        try {
+            firebase.initializeApp(firebaseConfig);
+            agregarLog("Firebase Inicializado correctamente.");
+        } catch (e) {
+            agregarLog("Error al inicializar Firebase SDK: " + e.message);
+        }
 
-        // REFERENCIA AL NODO CORRECTO
         const dbRef = firebase.database().ref("/letra_traducida");
         const letraElemento = document.getElementById("letraObtenida");
         const indicador = document.getElementById("statusIndicator");
@@ -147,17 +174,14 @@
         let ultimoTextoHablado = "";
         let listaVoces = [];
 
-        // CARGAR LAS VOCES DEL NAVEGADOR
         function cargarVoces() {
             if (!('speechSynthesis' in window)) return;
-            
             listaVoces = window.speechSynthesis.getVoices();
             voiceSelect.innerHTML = '';
-
             const vocesEspañol = listaVoces.filter(voz => voz.lang.startsWith('es'));
 
             if (vocesEspañol.length === 0) {
-                listaVoces.forEach((voz, index) => {
+                listaVoces.forEach((voz) => {
                     const option = document.createElement('option');
                     option.value = voz.name;
                     option.textContent = `${voz.name} (${voz.lang})`;
@@ -178,58 +202,46 @@
         }
         cargarVoces();
 
-        // REPRODUCIR TEXTO A VOZ
         function textToSpeech(texto) {
             if (!('speechSynthesis' in window)) return;
-
             window.speechSynthesis.cancel(); 
-
-            // Quitamos el signo "=" si viene en la cadena para mejorar la pronunciación
             let textoLimpio = texto.replace("=", ""); 
             const mensajeVoz = new SpeechSynthesisUtterance(textoLimpio);
-            
             const nombreVozSeleccionada = voiceSelect.value;
             const vozElegida = listaVoces.find(voz => voz.name === nombreVozSeleccionada);
-            
-            if (vozElegida) {
-                mensajeVoz.voice = vozElegida;
-            } else {
-                mensajeVoz.lang = 'es-ES';
-            }
-
-            mensajeVoz.rate = 1.0;  
-            mensajeVoz.pitch = 1.0; 
-
+            if (vozElegida) mensajeVoz.voice = vozElegida;
             window.speechSynthesis.speak(mensajeVoz);
         }
 
-        // ESCUCHAR EN TIEMPO REAL
+        // ESCUCHAR EN TIEMPO REAL CON MANEJO DE CAÍDAS
+        agregarLog("Esperando respuesta del servidor de Firebase...");
+        
         dbRef.on('value', (snapshot) => {
             if (snapshot.exists()) {
                 const data = snapshot.val();
+                agregarLog("¡Dato recibido con éxito!: " + data);
                 
-                // 1. Mostrar SIEMPRE el texto recibido en la tarjeta web
                 letraElemento.innerText = data;
-                
                 indicador.classList.add("online");
                 textoEstado.innerText = "Sistema en línea";
 
-                // 2. Lógica para hablar: Solo habla si el texto cambió
                 if (data !== ultimoTextoHablado) {
-                    // Evitamos que pronuncie "Ningun gesto" para no saturar de audio en reposo
                     if (data !== "Ningun gesto") {
                         textToSpeech(data);
                     }
                     ultimoTextoHablado = data;
                 }
             } else {
-                letraElemento.innerText = "Sin Datos";
+                letraElemento.innerText = "Nodo no encontrado";
                 indicador.classList.remove("online");
-                textoEstado.innerText = "Nodo vacío en la BD";
+                textoEstado.innerText = "Ruta vacía en la BD";
+                agregarLog("Alerta: El nodo '/letra_traducida' no contiene datos válidos.");
             }
         }, (error) => {
-            console.error("Error: ", error);
-            letraElemento.innerText = "Error de Conexión";
+            letraElemento.innerText = "Error de Acceso";
+            indicador.classList.remove("online");
+            textoEstado.innerText = "Denegado por Firebase";
+            agregarLog("ERROR CRÍTICO: Firebase rechazó la lectura. Motivo: " + error.message);
         });
     </script>
 </body>
