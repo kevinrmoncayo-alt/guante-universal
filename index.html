@@ -3,245 +3,124 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Monitoreo de Gestos - Traductor</title>
+    <title>Traductor de Gestos Directo</title>
     <style>
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: sans-serif; }
+        body { background-color: #121214; display: flex; justify-content: center; align-items: center; min-height: 100vh; color: #fff; }
+        .wrapper { background-color: #202024; padding: 30px; border-radius: 12px; text-align: center; width: 90%; max-width: 400px; box-shadow: 0 8px 24px rgba(0,0,0,0.3); }
+        h1 { font-size: 22px; margin-bottom: 20px; color: #00b37e; }
+        
+        /* Selector de voz sencillo */
+        .voice-box { margin-bottom: 20px; text-align: left; }
+        label { font-size: 12px; color: #a8a8b3; display: block; margin-bottom: 5px; }
+        select { width: 100%; padding: 10px; background: #121214; border: 1px solid #29292e; color: #fff; border-radius: 6px; }
 
-        body {
-            background-color: #f4f7f6;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            color: #333;
-        }
-
-        .container {
-            background-color: #ffffff;
-            padding: 30px;
-            border-radius: 15px;
-            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
-            text-align: center;
-            max-width: 450px;
-            width: 90%;
-        }
-
-        h1 {
-            font-size: 24px;
-            color: #2c3e50;
-            margin-bottom: 10px;
-        }
-
-        p.subtitle {
-            color: #7f8c8d;
-            font-size: 14px;
-            margin-bottom: 20px;
-        }
-
-        .selector-box {
-            margin-bottom: 20px;
-            text-align: left;
-        }
-
-        label {
-            font-size: 12px;
-            font-weight: bold;
-            color: #34495e;
-            display: block;
-            margin-bottom: 5px;
-        }
-
-        select {
-            width: 100%;
-            padding: 10px;
-            border-radius: 8px;
-            border: 1px solid #bdc3c7;
-            background-color: #fff;
-            color: #333;
-            font-size: 14px;
-            outline: none;
-        }
-
-        .display-card {
-            background: linear-gradient(135deg, #3498db, #2c3e50);
-            color: white;
-            padding: 40px 20px;
-            border-radius: 12px;
-            margin-bottom: 25px;
-        }
-
-        .letra-detectada {
-            font-size: 44px;
-            font-weight: bold;
-            letter-spacing: 1px;
-        }
-
-        .status-container {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            gap: 8px;
-            font-size: 14px;
-            color: #95a5a6;
-            margin-bottom: 15px;
-        }
-
-        .indicator {
-            width: 12px;
-            height: 12px;
-            background-color: #e74c3c;
-            border-radius: 50%;
-            transition: background-color 0.3s ease;
-        }
-
-        .indicator.online {
-            background-color: #2ecc71;
-            box-shadow: 0 0 8px #2ecc71;
-        }
-
-        /* Consola de errores interna */
-        .error-log {
-            background-color: #fadbd8;
-            border: 1px solid #e74c3c;
-            color: #78281f;
-            padding: 10px;
-            border-radius: 8px;
-            font-size: 11px;
-            text-align: left;
-            max-height: 100px;
-            overflow-y: auto;
-            white-space: pre-wrap;
-        }
+        /* Caja gigante donde sale la letra */
+        .letra-box { background-color: #121214; padding: 40px 10px; border-radius: 8px; border: 2px solid #00b37e; margin-bottom: 20px; }
+        .letra { font-size: 38px; font-weight: bold; color: #00b37e; }
+        
+        .status { font-size: 13px; color: #8d8d99; }
     </style>
-
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 </head>
 <body>
 
-    <div class="container">
+    <div class="wrapper">
         <h1>Intérprete de Señas</h1>
-        <p class="subtitle">Lectura en tiempo real con selección de voz</p>
 
-        <div class="selector-box">
-            <label for="voiceSelect">Selecciona el tipo de voz:</label>
-            <select id="voiceSelect"><option>Cargando voces...</option></select>
+        <div class="voice-box">
+            <label>Tipo de Voz:</label>
+            <select id="selectorVoces"><option>Cargando voces...</option></select>
         </div>
 
-        <div class="display-card">
-            <div class="letra-detectada" id="letraObtenida">Buscando Base de Datos...</div>
+        <div class="letra-box">
+            <div class="letra" id="pantallaLetra">Esperando Guante...</div>
         </div>
 
-        <div class="status-container">
-            <div class="indicator" id="statusIndicator"></div>
-            <span id="statusText">Intentando conectar...</span>
-        </div>
-
-        <div class="error-log" id="errorLog">Historial del sistema: Listo para capturar errores.</div>
+        <div class="status" id="textoConexion">Intentando conectar con Firebase...</div>
     </div>
 
     <script>
-        const logElement = document.getElementById("errorLog");
+        const pantalla = document.getElementById("pantallaLetra");
+        const estado = document.getElementById("textoConexion");
+        const selector = document.getElementById("selectorVoces");
         
-        function agregarLog(mensaje) {
-            logElement.innerText += "\n> " + mensaje;
-            console.log(mensaje);
-        }
-
-        // Configuración de Firebase
-        const firebaseConfig = {
-            databaseURL: "https://proyecto-4250e-default-rtdb.firebaseio.com"
-        };
-
-        try {
-            firebase.initializeApp(firebaseConfig);
-            agregarLog("Firebase Inicializado correctamente.");
-        } catch (e) {
-            agregarLog("Error al inicializar Firebase SDK: " + e.message);
-        }
-
-        const dbRef = firebase.database().ref("/letra_traducida");
-        const letraElemento = document.getElementById("letraObtenida");
-        const indicador = document.getElementById("statusIndicator");
-        const textoEstado = document.getElementById("statusText");
-        const voiceSelect = document.getElementById("voiceSelect");
-
-        let ultimoTextoHablado = "";
+        let ultimaLetra = "";
         let listaVoces = [];
 
-        function cargarVoces() {
+        // 1. MOTOR DE VOZ ULTRA SIMPLE
+        function inicializarVoces() {
             if (!('speechSynthesis' in window)) return;
             listaVoces = window.speechSynthesis.getVoices();
-            voiceSelect.innerHTML = '';
-            const vocesEspañol = listaVoces.filter(voz => voz.lang.startsWith('es'));
+            selector.innerHTML = '';
+            
+            // Filtra solo voces en español
+            let vocesEs = listaVoces.filter(v => v.lang.startsWith('es'));
+            if(vocesEs.length === 0) vocesEs = listaVoces; // Si no hay, muestra las que tenga
 
-            if (vocesEspañol.length === 0) {
-                listaVoces.forEach((voz) => {
-                    const option = document.createElement('option');
-                    option.value = voz.name;
-                    option.textContent = `${voz.name} (${voz.lang})`;
-                    voiceSelect.appendChild(option);
-                });
-            } else {
-                vocesEspañol.forEach((voz) => {
-                    const option = document.createElement('option');
-                    option.value = voz.name;
-                    option.textContent = voz.name.replace("Microsoft", "").replace("Google", "").trim();
-                    voiceSelect.appendChild(option);
-                });
-            }
+            vocesEs.forEach(voz => {
+                const opt = document.createElement('option');
+                opt.value = voz.name;
+                opt.textContent = voz.name.replace("Microsoft", "").replace("Google", "").trim();
+                selector.appendChild(opt);
+            });
         }
-
         if (typeof speechSynthesis !== 'undefined' && speechSynthesis.onvoiceschanged !== undefined) {
-            speechSynthesis.onvoiceschanged = cargarVoces;
+            speechSynthesis.onvoiceschanged = inicializarVoces;
         }
-        cargarVoces();
+        inicializarVoces();
 
-        function textToSpeech(texto) {
+        function hablar(texto) {
             if (!('speechSynthesis' in window)) return;
-            window.speechSynthesis.cancel(); 
-            let textoLimpio = texto.replace("=", ""); 
-            const mensajeVoz = new SpeechSynthesisUtterance(textoLimpio);
-            const nombreVozSeleccionada = voiceSelect.value;
-            const vozElegida = listaVoces.find(voz => voz.name === nombreVozSeleccionada);
-            if (vozElegida) mensajeVoz.voice = vozElegida;
-            window.speechSynthesis.speak(mensajeVoz);
+            window.speechSynthesis.cancel();
+            
+            let textoLimpio = texto.replace("=", "").replace("Letra", "Letra ");
+            const utterance = new SpeechSynthesisUtterance(textoLimpio);
+            
+            const vozSeleccionada = listaVoces.find(v => v.name === selector.value);
+            if (vozSeleccionada) utterance.voice = vozSeleccionada;
+            
+            window.speechSynthesis.speak(utterance);
         }
 
-        // ESCUCHAR EN TIEMPO REAL CON MANEJO DE CAÍDAS
-        agregarLog("Esperando respuesta del servidor de Firebase...");
-        
-        dbRef.on('value', (snapshot) => {
-            if (snapshot.exists()) {
-                const data = snapshot.val();
-                agregarLog("¡Dato recibido con éxito!: " + data);
-                
-                letraElemento.innerText = data;
-                indicador.classList.add("online");
-                textoEstado.innerText = "Sistema en línea";
+        // 2. CONEXIÓN DIRECTA POR HTTP (Evita bloqueos de seguridad y CORS)
+        // Agregamos un número aleatorio al final para obligar al navegador a traer el dato nuevo sin usar caché
+        const urlFirebase = "https://proyecto-4250e-default-rtdb.firebaseio.com/letra_traducida.json";
 
-                if (data !== ultimoTextoHablado) {
-                    if (data !== "Ningun gesto") {
-                        textToSpeech(data);
+        function consultarFirebase() {
+            fetch(`${urlFirebase}?nocache=${new Date().getTime()}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data) {
+                        // Forzar a que pinte el texto en la pantalla siempre
+                        pantalla.innerText = data;
+                        estado.innerText = "Conectado por canal directo";
+                        estado.style.color = "#00b37e";
+
+                        // Lógica para hablar solo si cambió y no es reposo
+                        if (data !== ultimaLetra) {
+                            if (data !== "Ningun gesto") {
+                                hablar(data);
+                            }
+                            ultimaLetra = data;
+                        }
+                    } else {
+                        pantalla.innerText = "Sin Datos";
+                        estado.innerText = "Nodo vacío o inexistente";
                     }
-                    ultimoTextoHablado = data;
-                }
-            } else {
-                letraElemento.innerText = "Nodo no encontrado";
-                indicador.classList.remove("online");
-                textoEstado.innerText = "Ruta vacía en la BD";
-                agregarLog("Alerta: El nodo '/letra_traducida' no contiene datos válidos.");
-            }
-        }, (error) => {
-            letraElemento.innerText = "Error de Acceso";
-            indicador.classList.remove("online");
-            textoEstado.innerText = "Denegado por Firebase";
-            agregarLog("ERROR CRÍTICO: Firebase rechazó la lectura. Motivo: " + error.message);
+                })
+                .catch(error => {
+                    console.error(error);
+                    estado.innerText = "Buscando señal del ESP32...";
+                    estado.style.color = "#f75a68";
+                });
+        }
+
+        // Consultar automáticamente cada 400 milisegundos de forma transparente
+        setInterval(consultarFirebase, 400);
+
+        // Habilitar audio con un toque en la pantalla
+        document.body.addEventListener('click', () => {
+            if(ultimaLetra && ultimaLetra !== "Ningun gesto") hablar(ultimaLetra);
         });
     </script>
 </body>
