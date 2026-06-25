@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Traductor y Monitor Completo</title>
+    <title>Traductor de Gestos Completo</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: sans-serif; }
         body { background-color: #121214; display: flex; justify-content: center; align-items: center; min-height: 100vh; color: #fff; padding: 15px; }
@@ -17,9 +17,9 @@
         .letra-box { background-color: #121214; padding: 30px 10px; border-radius: 8px; border: 2px solid #00b37e; margin-bottom: 20px; }
         .letra { font-size: 36px; font-weight: bold; color: #00b37e; }
         
-        /* Consola del Monitor Serial Integrada */
+        /* Consola para el Monitor Serial */
         .console-title { font-size: 12px; text-align: left; color: #a8a8b3; margin-bottom: 5px; font-weight: bold; }
-        .console { background-color: #000; color: #00ff00; font-family: monospace; padding: 12px; border-radius: 6px; border: 1px solid #29292e; text-align: left; font-size: 12px; min-height: 55px; white-space: pre-wrap; margin-bottom: 15px; }
+        .console { background-color: #000; color: #00ff00; font-family: monospace; padding: 12px; border-radius: 6px; border: 1px solid #29292e; text-align: left; font-size: 12px; min-height: 70px; white-space: pre-wrap; margin-bottom: 15px; }
         
         .status { font-size: 12px; color: #8d8d99; }
     </style>
@@ -38,10 +38,10 @@
             <div class="letra" id="pantallaLetra">Esperando Guante...</div>
         </div>
 
-        <div class="console-title">Monitor Serial Inalámbrico (Firebase):</div>
-        <div class="console" id="pantallaSerial">Cargando lecturas...</div>
+        <div class="console-title">Monitor Serial Inalámbrico (Nube):</div>
+        <div class="console" id="pantallaSerial">Esperando señal del ESP32...</div>
 
-        <div class="status" id="textoConexion">Conectando al flujo de datos...</div>
+        <div class="status" id="textoConexion">Conectando con Firebase...</div>
     </div>
 
     <script>
@@ -82,20 +82,20 @@
             window.speechSynthesis.speak(utterance);
         }
 
-        // PETICIÓN HTTP DIRECTA A LOS NODOS
+        // Enlaces directos a tus dos variables de Firebase
         const urlLetra = "https://proyecto-4250e-default-rtdb.firebaseio.com/letra_traducida.json";
         const urlSerial = "https://proyecto-4250e-default-rtdb.firebaseio.com/monitor_serial.json";
 
-        function consultarDatos() {
+        function consultarFirebase() {
             const timestamp = new Date().getTime();
 
-            // 1. Traer Letra Traducida
+            // 1. Leer la Letra Traducida
             fetch(`${urlLetra}?nocache=${timestamp}`)
                 .then(res => res.json())
                 .then(data => {
                     if (data) {
                         pantalla.innerText = data;
-                        estado.innerText = "Conectado de forma segura";
+                        estado.innerText = "Conectado exitosamente";
                         estado.style.color = "#00b37e";
 
                         if (data !== ultimaLetra) {
@@ -103,18 +103,23 @@
                             ultimaLetra = data;
                         }
                     }
-                }).catch(err => { estado.innerText = "Buscando guante..."; estado.style.color = "#f75a68"; });
+                }).catch(err => { 
+                    estado.innerText = "Buscando señal del guante..."; 
+                    estado.style.color = "#f75a68"; 
+                });
 
-            // 2. Traer Lecturas de los Sensores (Monitor Serial)
+            // 2. Leer el Monitor Serial e imprimirlo en el cuadro negro
             fetch(`${urlSerial}?nocache=${timestamp}`)
                 .then(res => res.json())
                 .then(data => {
-                    if (data) consola.innerText = data;
+                    if (data) {
+                        consola.innerText = data;
+                    }
                 }).catch(err => {});
         }
 
-        // Consulta en paralelo cada 400ms sin trabar la página
-        setInterval(consultarDatos, 400);
+        // Consultar de forma automática cada 400 milisegundos
+        setInterval(consultarFirebase, 400);
 
         document.body.addEventListener('click', () => {
             if(ultimaLetra && ultimaLetra !== "Ningun gesto") hablar(ultimaLetra);
