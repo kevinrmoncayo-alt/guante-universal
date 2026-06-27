@@ -3,127 +3,161 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Traductor de Gestos Completo</title>
-    <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: sans-serif; }
-        body { background-color: #121214; display: flex; justify-content: center; align-items: center; min-height: 100vh; color: #fff; padding: 15px; }
-        .wrapper { background-color: #202024; padding: 25px; border-radius: 12px; text-align: center; width: 100%; max-width: 450px; box-shadow: 0 8px 24px rgba(0,0,0,0.3); }
-        h1 { font-size: 22px; margin-bottom: 15px; color: #00b37e; }
-        
-        .voice-box { margin-bottom: 15px; text-align: left; }
-        label { font-size: 11px; color: #a8a8b3; display: block; margin-bottom: 5px; }
-        select { width: 100%; padding: 8px; background: #121214; border: 1px solid #29292e; color: #fff; border-radius: 6px; }
+    <title>Sense-Vox - Traductor de Lenguaje de Señas</title>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 
-        .letra-box { background-color: #121214; padding: 30px 10px; border-radius: 8px; border: 2px solid #00b37e; margin-bottom: 20px; }
-        .letra { font-size: 36px; font-weight: bold; color: #00b37e; }
-        
-        /* Consola para el Monitor Serial */
-        .console-title { font-size: 12px; text-align: left; color: #a8a8b3; margin-bottom: 5px; font-weight: bold; }
-        .console { background-color: #000; color: #00ff00; font-family: monospace; padding: 12px; border-radius: 6px; border: 1px solid #29292e; text-align: left; font-size: 12px; min-height: 70px; white-space: pre-wrap; margin-bottom: 15px; }
-        
-        .status { font-size: 12px; color: #8d8d99; }
+    <style>
+        :root {
+            --primary: #2563eb;
+            --background: #f8fafc;
+            --text: #1e293b;
+            --card-bg: #ffffff;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--background);
+            color: var(--text);
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            width: 90%;
+            max-width: 500px;
+            text-align: center;
+        }
+
+        header h1 {
+            color: var(--primary);
+            margin-bottom: 5px;
+            font-size: 2.5rem;
+        }
+
+        header p {
+            color: #64748b;
+            margin-top: 0;
+            margin-bottom: 30px;
+        }
+
+        .card {
+            background: var(--card-bg);
+            padding: 30px;
+            border-radius: 20px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
+            margin-bottom: 20px;
+            transition: transform 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-2px);
+        }
+
+        .card h2 {
+            margin-top: 0;
+            font-size: 1.2rem;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .traduccion {
+            font-size: 3.5rem;
+            font-weight: bold;
+            color: var(--primary);
+            margin: 20px 0;
+            min-height: 80px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .estado-conexion {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.9rem;
+            color: #64748b;
+            background: #e2e8f0;
+            padding: 6px 16px;
+            border-radius: 50px;
+        }
+
+        .dot {
+            width: 10px;
+            height: 10px;
+            background-color: #ef4444;
+            border-radius: 50%;
+        }
+
+        .dot.conectado {
+            background-color: #22c55e;
+            box-shadow: 0 0 8px #22c55e;
+        }
     </style>
 </head>
 <body>
 
-    <div class="wrapper">
-        <h1>Intérprete de Señas</h1>
+    <div class="container">
+        <header>
+            <h1>Sense-Vox</h1>
+            <p>Traducción de Lenguaje de Señas en Tiempo Real</p>
+        </header>
 
-        <div class="voice-box">
-            <label>Tipo de Voz:</label>
-            <select id="selectorVoces"><option>Cargando voces...</option></select>
-        </div>
-
-        <div class="letra-box">
-            <div class="letra" id="pantallaLetra">Esperando Guante...</div>
-        </div>
-
-        <div class="console-title">Monitor Serial Inalámbrico (Nube):</div>
-        <div class="console" id="pantallaSerial">Esperando señal del ESP32...</div>
-
-        <div class="status" id="textoConexion">Conectando con Firebase...</div>
+        <main class="card">
+            <h2>Gesto Detectado</h2>
+            <div id="letra-traducida" class="traduccion">Cargando...</div>
+            
+            <div class="estado-conexion">
+                <div id="status-dot" class="dot"></div>
+                <span id="status-text">Desconectado de Firebase</span>
+            </div>
+        </main>
     </div>
 
     <script>
-        const pantalla = document.getElementById("pantallaLetra");
-        const consola = document.getElementById("pantallaSerial");
-        const estado = document.getElementById("textoConexion");
-        const selector = document.getElementById("selectorVoces");
+        // Configuración de tu base de datos de Firebase
+        const firebaseConfig = {
+            databaseURL: "https://proyecto-4250e-default-rtdb.firebaseio.com"
+        };
+
+        // Inicializar Firebase
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+
+        // Referencia directa al nodo de la traducción (Excluyendo el monitor serial)
+        const letraRef = database.ref('/letra_traducida');
         
-        let ultimaLetra = "";
-        let listaVoces = [];
+        // Elementos del DOM
+        const letraContenedor = document.getElementById('letra-traducida');
+        const statusDot = document.getElementById('status-dot');
+        const statusText = document.getElementById('status-text');
 
-        function inicializarVoces() {
-            if (!('speechSynthesis' in window)) return;
-            listaVoces = window.speechSynthesis.getVoices();
-            selector.innerHTML = '';
-            let vocesEs = listaVoces.filter(v => v.lang.startsWith('es'));
-            if(vocesEs.length === 0) vocesEs = listaVoces;
-
-            vocesEs.forEach(voz => {
-                const opt = document.createElement('option');
-                opt.value = voz.name;
-                opt.textContent = voz.name.replace("Microsoft", "").replace("Google", "").trim();
-                selector.appendChild(opt);
-            });
-        }
-        if (typeof speechSynthesis !== 'undefined' && speechSynthesis.onvoiceschanged !== undefined) {
-            speechSynthesis.onvoiceschanged = inicializarVoces;
-        }
-        inicializarVoces();
-
-        function hablar(texto) {
-            if (!('speechSynthesis' in window)) return;
-            window.speechSynthesis.cancel();
-            let textoLimpio = texto.replace("=", "").replace("Letra", "Letra ");
-            const utterance = new SpeechSynthesisUtterance(textoLimpio);
-            const vozSeleccionada = listaVoces.find(v => v.name === selector.value);
-            if (vozSeleccionada) utterance.voice = vozSeleccionada;
-            window.speechSynthesis.speak(utterance);
-        }
-
-        // Enlaces directos a tus dos variables de Firebase
-        const urlLetra = "https://proyecto-4250e-default-rtdb.firebaseio.com/letra_traducida.json";
-        const urlSerial = "https://proyecto-4250e-default-rtdb.firebaseio.com/monitor_serial.json";
-
-        function consultarFirebase() {
-            const timestamp = new Date().getTime();
-
-            // 1. Leer la Letra Traducida
-            fetch(`${urlLetra}?nocache=${timestamp}`)
-                .then(res => res.json())
-                .then(data => {
-                    if (data) {
-                        pantalla.innerText = data;
-                        estado.innerText = "Conectado exitosamente";
-                        estado.style.color = "#00b37e";
-
-                        if (data !== ultimaLetra) {
-                            if (data !== "Ningun gesto") hablar(data);
-                            ultimaLetra = data;
-                        }
-                    }
-                }).catch(err => { 
-                    estado.innerText = "Buscando señal del guante..."; 
-                    estado.style.color = "#f75a68"; 
-                });
-
-            // 2. Leer el Monitor Serial e imprimirlo en el cuadro negro
-            fetch(`${urlSerial}?nocache=${timestamp}`)
-                .then(res => res.json())
-                .then(data => {
-                    if (data) {
-                        consola.innerText = data;
-                    }
-                }).catch(err => {});
-        }
-
-        // Consultar de forma automática cada 400 milisegundos
-        setInterval(consultarFirebase, 400);
-
-        document.body.addEventListener('click', () => {
-            if(ultimaLetra && ultimaLetra !== "Ningun gesto") hablar(ultimaLetra);
+        // Escuchar cambios en tiempo real de la letra traducida
+        letraRef.on('value', (snapshot) => {
+            if (snapshot.exists()) {
+                const valor = snapshot.val();
+                letraContenedor.innerText = valor;
+                
+                // Actualizar interfaz a conectado exitosamente
+                statusDot.classList.add('conectado');
+                statusText.innerText = "Sistema en Línea";
+            } else {
+                letraContenedor.innerText = "Esperando Gesto...";
+            }
+        }, (error) => {
+            console.error("Error al leer Firebase: ", error);
+            letraContenedor.innerText = "Error";
+            statusDot.classList.remove('conectado');
+            statusText.innerText = "Error de Conexión";
         });
     </script>
+
 </body>
 </html>
